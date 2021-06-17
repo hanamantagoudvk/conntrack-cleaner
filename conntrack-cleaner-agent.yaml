@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: conntrack-cleaner-agent
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      k8s-app: conntrack-cleaner-agent
+  template:
+    metadata:
+      labels:
+        k8s-app: conntrack-cleaner-agent
+    spec:
+      hostNetwork: true
+      containers:
+        - name: conntrack-cleaner-agent
+          image: hanamantagoud/conntrack-cleaner:v0.1
+          env:
+            # Values for CONNTRACK_TABLE_DUMP_FREQUENCY should contain duration such as 1s,100ms.
+            # NOTE: Dont set values in nonosecond (ns), microsecond(ms).
+            - name: CONNTRACK_TABLE_DUMP_FREQUENCY
+              value: "1s"
+            - name: CONNECTION_RENEWAL_THRESHOLD
+              value: "3"
+          securityContext:
+            privileged: false
+            capabilities:
+              add: ["NET_ADMIN", "NET_RAW"]
+
