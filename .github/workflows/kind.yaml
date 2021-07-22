@@ -1,0 +1,40 @@
+name: e2e-kind
+on: [push, pull_request]
+jobs:
+  e2e-kind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+
+      - name: Setup cluster
+        run: |
+          cat <<EOF | /usr/local/bin/kind create cluster -v7 --wait 1m --retain --config=-
+          kind: Cluster
+          apiVersion: kind.x-k8s.io/v1alpha4
+          nodes:
+          - role: control-plane
+          - role: worker
+          - role: worker
+          EOF
+
+      - name: Download e2e binary
+        run: |
+          KUBERNETES_VERSION=v1.21.3
+          curl -L https://dl.k8s.io/${KUBERNETES_VERSION}/kubernetes-test-linux-amd64.tar.gz -o kubernetes-test-linux-amd64.tar.gz
+          tar xvzf kubernetes-test-linux-amd64.tar.gz \
+            --strip-components=3 kubernetes/test/bin/ginkgo kubernetes/test/bin/e2e.test
+
+      - name: Run e2e tests
+        run: |
+          export KUBERNETES_CONFORMANCE_TEST='y'
+          kind get kubeconfig > kubeconfig.conf
+          ./e2e.test --kubeconfig ./kubeconfig.conf \
+            -provider skeleton \
+            -ginkgo.focus="Conntrack" \
+            -ginkgo.skip="Serial"
+
+      - name: cleanup
+        run: |
+          kind delete cluster
+          
