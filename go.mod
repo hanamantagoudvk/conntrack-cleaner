@@ -1,4 +1,4 @@
-module ctrk-clean/conntrack-cleaner
+module conntrack-cleaner
 
 go 1.16
 
