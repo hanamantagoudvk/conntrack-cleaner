@@ -16,7 +16,7 @@
 BIN := conntrack-cleaner
 
 # This repo's root import path (under GOPATH).
-PKG := k8s.io/conntrack-cleaner
+PKG := conntrack-cleaner
 
 # Where to push the docker image.
 REGISTRY ?= gcr.io/k8s-staging-networking
@@ -36,8 +36,7 @@ VERSION := $(shell git describe --tags --always --dirty)
 
 SRC_DIRS := cmd # directories which hold app source (not vendored)
 
-#ALL_ARCH := amd64 arm arm64 ppc64le
-ALL_ARCH := amd64
+ALL_ARCH := amd64 arm arm64 ppc64le
 
 # Ensure that the docker command line supports the manifest images
 export DOCKER_CLI_EXPERIMENTAL=enabled
@@ -68,13 +67,20 @@ MANIFEST_IMAGE := $(REGISTRY)/$(BIN)
 
 BUILD_IMAGE ?= golang:1.16-alpine
 
+# If you want to build all binaries, see the 'all-build' rule.
+# If you want to build all containers, see the 'all-container' rule.
+# If you want to build AND push all containers, see the 'all-push' rule.
+all: build
+
+build-%:
+        @$(MAKE) --no-print-directory ARCH=$* build
 
 build: bin/$(ARCH)/$(BIN)
 
 bin/$(ARCH)/$(BIN): build-dirs
-	@echo "building: $@"
-	@docker pull $(BUILD_IMAGE)
-	@docker run                                                            \
+        @echo "building: $@"
+        @docker pull $(BUILD_IMAGE)
+        @docker run                                                            \
             -$(TTY)i                                                           \
             -u $$(id -u):$$(id -g)                                             \
             -v $$(pwd)/.go:/go                                                 \
@@ -91,11 +97,26 @@ bin/$(ARCH)/$(BIN): build-dirs
                 ./build/build.sh                                               \
             "
 
+container-%:
+        @$(MAKE) --no-print-directory ARCH=$* container
+
+DOTFILE_IMAGE = $(subst :,_,$(subst /,_,$(IMAGE))-$(VERSION))
+
+container: .container-$(DOTFILE_IMAGE) container-name
+.container-$(DOTFILE_IMAGE): bin/$(ARCH)/$(BIN) Dockerfile.in
+        @sed \
+            -e 's|ARG_BIN|$(BIN)|g' \
+            -e 's|ARG_ARCH|$(ARCH)|g' \
+            -e 's|ARG_FROM|$(BASEIMAGE)|g' \
+            Dockerfile.in > .dockerfile-$(ARCH)
+        @docker build --pull -t $(IMAGE):$(VERSION) -f .dockerfile-$(ARCH) .
+        @docker images -q $(IMAGE):$(VERSION) > $@
+
 build-dirs:
-	@mkdir -p bin/$(ARCH)
-	@mkdir -p .go/src/$(PKG) .go/pkg .go/bin .go/std/$(ARCH)
+        @mkdir -p bin/$(ARCH)
+        @mkdir -p .go/src/$(PKG) .go/pkg .go/bin .go/std/$(ARCH)
 
 clean: bin-clean
 
 bin-clean:
-	rm -rf .go bin
+        rm -rf .go bin
